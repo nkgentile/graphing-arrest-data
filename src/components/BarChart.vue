@@ -1,11 +1,26 @@
 <template>
-  <svg ref="container" />
+  <svg
+    ref="container"
+    :width="width"
+    :height="height"
+  >
+    <rect
+      v-for="(d, i) in chart"
+      class="bar"
+      :x="pointToX(d)"
+      :y="pointToY(d)"
+      :width="x.bandwidth()"
+      :height="height - pointToY(d)"
+    />
+  </svg>
 </template>
 
 <script>
-  import arrests from '@/assets/arrest-data.json';
+  import arrests from '@/api/arrests';
 
   import {
+    multiply,
+    T,
     filter,
     propEq,
     prop,
@@ -16,6 +31,8 @@
     values,
     toPairs,
     pluck,
+    inc,
+    identity,
   } from 'ramda';
 
   import {
@@ -32,72 +49,86 @@
   } from 'd3-array';
 
   export default {
-    mounted(){
-      const whereEthnicityIs = propEq('descent_cd');
 
-      const getArrestDate = prop('arst_date');
-      const constructDate = d => new Date(d);
-      const dates = map(
-        pipe(
-          getArrestDate,
-          constructDate
-        ),
-        arrests
-      );
+    props: {
+      data: {
+        type: Array,
+        default: () => [],
+      },
 
-      const arrestsByYear = countBy(
-        (d) => d.getUTCFullYear(),
-        dates
-      );
+      width: {
+        type: Number,
+        default: 800,
+      },
 
-      const data = pipe(
-        toPairs,
-        map( a => ({
-          'year': a[0],
-          'frequency': a[1],
-        }))
-      )(arrestsByYear);
+      height: {
+        type: Number,
+        default: 600,
+      },
+    },
 
-      const width = 800;
-      const height = 600;
-
-      const x = scaleBand()
-        .range([0, width])
-        .domain(pluck('year', data))
-        .padding(0.1)
-      const y = scaleLinear()
-        .range([height, 0])
-        .domain([
-          0,
+    computed: {
+      dates(){
+        return map(
           pipe(
-            pluck('frequency'),
-            max,
-          )(data)
-        ]);
+            prop('arst_date'),
+            d => new Date(d)
+          ),
+          this.data
+        );
+      },
 
-      const { container } = this.$refs;
-      const chart = select(container)
-        .attr('width', width)
-        .attr('height', height);
+      arrestsByYear(){
+        return countBy(
+          (d) => d.getUTCFullYear(),
+          this.dates
+        );
+      },
 
-      const pointToX = pipe(
-        prop('year'),
-        x
-      );
+      chart(){
+        return pipe(
+          toPairs,
+          map( a => ({
+            'year': a[0],
+            'frequency': a[1],
+          }))
+        )(this.arrestsByYear);
+      },
 
-      const pointToY = pipe(
-        prop('frequency'),
-        y
-      );
+      x(){
+        return scaleBand()
+          .range([0, this.width])
+          .domain(pluck('year', this.chart))
+          .padding(0.1)
+      },
 
-      const bars = chart.selectAll('.bar')
-        .data(data)
-        .enter().append('rect')
-        .attr('class', 'bar')
-        .attr('x', pointToX)
-        .attr('width', x.bandwidth())
-        .attr('y', pointToY)
-        .attr('height', d => height - pointToY(d))
+      y(){
+        return scaleLinear()
+          .range([this.height, 0])
+          .domain([
+            0,
+            pipe(
+              pluck('frequency'),
+              max,
+            )(this.chart)
+          ]);
+      },
+      pointToX(){
+        return pipe(
+          prop('year'),
+          this.x
+        );
+      },
+      pointToY(){
+        return pipe(
+          prop('frequency'),
+          this.y
+        );
+      },
+    },
+
+    methods: {
+      whereEthnicityIs: propEq('descent_cd'),
     },
   };
 </script>
